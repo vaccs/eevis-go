@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EEVIS</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        #flutter-container {
+            height: 90vh;
+            width: 100%;
+            overflow: hidden;
+        }
+
+        #flutter-container iframe {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* Loading indicator */
+        #loading-indicator {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            color: #8B4513;
+            font-size: 18px;
+        }
+
+        #loading-indicator.hidden {
+            display: none;
+        }
+
+        #bottom-bar {
+            height: 10vh;
+            background-color: #f5f5f5;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 0 20px;
+            border-top: 1px solid #ddd;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        button {
+            background-color: #8B4513;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #A0522D;
+        }
+
+        button:active {
+            background-color: #654321;
+        }
+
+        button:disabled {
+            background-color: #ccc;
+            cursor: not-allowed;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+    <div id="flutter-container">
+        <div id="loading-indicator">Loading Flutter App...</div>
+        <iframe id="flutter-iframe" src="/eevis/visual/" onload="hideLoadingIndicator()"></iframe>
+    </div>
+    
+    <div id="bottom-bar">
+        <div class="button-group">
+            <button id="about-btn">About</button>
+            {{ if and .isLoggedIn .isAdmin }}
+                <button id="report-issue-btn" onclick="window.location.href='/eevis/report-issue'">Report Issue</button>
+                <button id="add-user-btn" onclick="window.location.href='/eevis/add-user'">Add User</button>
+            {{ end }}
+            {{ if .isLoggedIn }}
+                <button id="change-password-btn" onclick="window.location.href='/eevis/change-password'">Change Password</button>
+            {{ end }}
+        </div>
+        <div class="button-group" style="display: flex; align-items: center; gap: 15px;">
+            {{ if .isLoggedIn }}
+                <span style="color: #333;">Logged in as: <strong>{{ .username }}</strong>{{ if .isAdmin }} <span style="color: #8B4513;">(Admin)</span>{{ end }}</span>
+                <button id="logout-btn" onclick="window.location.href='/eevis/logout'">Logout</button>
+            {{ else }}
+                <span style="color: #666;">Not logged in</span>
+                <button id="login-btn" onclick="window.location.href='/eevis/login'">Login</button>
+            {{ end }}
+        </div>
+    </div>
+
+    <script>
+        // Hide loading indicator when iframe loads
+        function hideLoadingIndicator() {
+            const indicator = document.getElementById('loading-indicator');
+            if (indicator) {
+                indicator.classList.add('hidden');
+            }
+        }
+
+        // Fix for non-Chrome browsers: ensure iframe loads properly
+        document.addEventListener('DOMContentLoaded', function() {
+            const iframe = document.getElementById('flutter-iframe');
+            
+            // Force reload iframe if it doesn't load within 2 seconds (Firefox/Safari fix)
+            const loadTimeout = setTimeout(function() {
+                if (!iframe.contentDocument || iframe.contentDocument.readyState !== 'complete') {
+                    console.log('Iframe load timeout, reloading...');
+                    const src = iframe.src;
+                    iframe.src = '';
+                    setTimeout(function() {
+                        iframe.src = src;
+                    }, 100);
+                }
+            }, 2000);
+
+            // Clear timeout if iframe loads successfully
+            iframe.addEventListener('load', function() {
+                clearTimeout(loadTimeout);
+                hideLoadingIndicator();
+                
+                // Additional check for Firefox/Safari: verify content actually loaded
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    if (!iframeDoc.body || iframeDoc.body.children.length === 0) {
+                        console.log('Iframe body empty, reloading...');
+                        setTimeout(function() {
+                            const src = iframe.src;
+                            iframe.src = '';
+                            setTimeout(function() {
+                                iframe.src = src;
+                            }, 100);
+                        }, 500);
+                    }
+                } catch (e) {
+                    // Cross-origin restriction, assume content loaded
+                    console.log('Cross-origin check (content likely loaded)');
+                }
+            });
+
+            // Handle iframe errors
+            iframe.addEventListener('error', function() {
+                console.error('Iframe failed to load');
+                const indicator = document.getElementById('loading-indicator');
+                if (indicator) {
+                    indicator.textContent = 'Failed to load Flutter app. Please refresh the page.';
+                    indicator.style.color = '#dc3545';
+                }
+            });
+        });
+
+        // Add event listeners for buttons
+        document.getElementById('about-btn').addEventListener('click', function() {
+            alert('EEVis - Expression Evaluation Visualization.');
+        });
+    </script>
+</body>
+</html>
