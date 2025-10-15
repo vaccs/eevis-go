@@ -18,6 +18,17 @@ vendor/
 # Go workspace file
 go.work
 
+# Environment variables and secrets
+.env
+*.pem
+*.key
+*.crt
+
+# Database files
+*.sql.backup
+irvis_schema.sql
+setup_database.sql
+
 # IDE files
 .vscode/
 .idea/
