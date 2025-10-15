@@ -270,6 +270,114 @@ func main() {
 		c.Redirect(http.StatusFound, "/eevis")
 	})
 
+	// Protected routes - Authenticated users only
+	authRoutes := r.Group("/eevis")
+	authRoutes.Use(requireAuth())
+	{
+		// GET /eevis/change-password - Display password change form
+		authRoutes.GET("/change-password", func(c *gin.Context) {
+			session := sessions.Default(c)
+			username := session.Get("username")
+
+			c.HTML(http.StatusOK, "change_password.html", gin.H{
+				"username": username,
+			})
+		})
+
+		// POST /eevis/change-password - Process password change
+		authRoutes.POST("/change-password", func(c *gin.Context) {
+			log.Printf("POST /eevis/change-password from %s", c.ClientIP())
+			session := sessions.Default(c)
+			username := session.Get("username")
+
+			currentPassword := c.PostForm("current_password")
+			newPassword := c.PostForm("new_password")
+			confirmPassword := c.PostForm("confirm_password")
+
+			// Validate required fields
+			if currentPassword == "" || newPassword == "" || confirmPassword == "" {
+				log.Printf("Missing required fields in change password form")
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "All fields are required",
+				})
+				return
+			}
+
+			// Validate password confirmation
+			if newPassword != confirmPassword {
+				log.Printf("Password confirmation mismatch")
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "New passwords do not match",
+				})
+				return
+			}
+
+			// Validate password length
+			if len(newPassword) < 6 {
+				log.Printf("Password too short")
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "New password must be at least 6 characters",
+				})
+				return
+			}
+
+			// Get user from database
+			user, err := getUserByUsername(username.(string))
+			if err != nil {
+				log.Printf("Error retrieving user: %v", err)
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "Error retrieving user information",
+				})
+				return
+			}
+
+			// Verify current password
+			hashedCurrentPassword := sha256sum(currentPassword)
+			if user.HashedPassword != hashedCurrentPassword {
+				log.Printf("Incorrect current password for user %v", username)
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "Current password is incorrect",
+				})
+				return
+			}
+
+			// Check if new password is different from current
+			if currentPassword == newPassword {
+				log.Printf("New password same as current password")
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "New password must be different from current password",
+				})
+				return
+			}
+
+			// Hash new password
+			hashedNewPassword := sha256sum(newPassword)
+
+			// Update password in database
+			_, err = db.Exec("UPDATE users SET hashed_password=? WHERE username=?", hashedNewPassword, username)
+			if err != nil {
+				log.Printf("Failed to update password for user %v: %v", username, err)
+				c.HTML(http.StatusOK, "change_password.html", gin.H{
+					"username": username,
+					"error":    "Failed to update password",
+				})
+				return
+			}
+
+			log.Printf("User %v successfully changed password", username)
+			c.HTML(http.StatusOK, "change_password.html", gin.H{
+				"username": username,
+				"success":  "Password changed successfully!",
+			})
+		})
+	}
+
 	// Protected routes - Admin only
 	adminRoutes := r.Group("/eevis")
 	adminRoutes.Use(requireAuth(), requireAdmin())

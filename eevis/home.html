@@ -104,6 +104,9 @@
                 <button id="report-issue-btn" onclick="window.location.href='/eevis/report-issue'">Report Issue</button>
                 <button id="add-user-btn" onclick="window.location.href='/eevis/add-user'">Add User</button>
             {{ end }}
+            {{ if .isLoggedIn }}
+                <button id="change-password-btn" onclick="window.location.href='/eevis/change-password'">Change Password</button>
+            {{ end }}
         </div>
         <div class="button-group" style="display: flex; align-items: center; gap: 15px;">
             {{ if .isLoggedIn }}
