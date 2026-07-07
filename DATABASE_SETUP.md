@@ -60,6 +60,19 @@ To recreate the database or run on another machine:
 ./setup_eevis_database.sh
 ```
 
+### Fresh setup without an existing `irvis` database
+
+`setup_eevis_database.sh` copies its schema from an existing `irvis` database, which
+won't be available on a new machine (or in a container). Use `schema.sql` instead:
+
+```bash
+mysql -u root -p < schema.sql
+```
+
+This creates the `eevis` database and `users` table directly, with no dependency on
+`irvis`. It's also what the Docker setup in `../eevis-docker` uses to provision the
+database automatically.
+
 The script will:
 1. Prompt for MySQL root password
 2. Check if irvis database exists
