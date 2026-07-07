@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"fmt"
 	"log"
+	"net"
 	"net/http"
 	"os"
 	"strings"
@@ -27,6 +28,7 @@ type Config struct {
 	DBHost        string
 	DBPort        string
 	DBName        string
+	AppHost       string
 	AppPort       string
 	SessionSecret string
 	UseTLS        bool
@@ -43,6 +45,7 @@ func LoadConfig() *Config {
 		DBHost:        getEnv("DB_HOST", "localhost"),
 		DBPort:        getEnv("DB_PORT", "3306"),
 		DBName:        getEnv("DB_NAME", "eevis"),
+		AppHost:       getEnv("APP_HOST", "127.0.0.1"),
 		AppPort:       getEnv("APP_PORT", "8080"),
 		SessionSecret: getEnv("SESSION_SECRET", "change-this-secret-key"),
 		UseTLS:        getEnv("USE_TLS", "false") == "true",
@@ -570,7 +573,7 @@ func main() {
 	})
 
 	// Start the server
-	serverAddr := ":" + config.AppPort
+	serverAddr := net.JoinHostPort(config.AppHost, config.AppPort)
 
 	if config.UseTLS {
 		// Validate TLS configuration
@@ -578,12 +581,12 @@ func main() {
 			log.Fatal("TLS is enabled but TLS_CERT_FILE or TLS_KEY_FILE is not set")
 		}
 
-		log.Printf("Starting EEVIS server with TLS on https://localhost%s\n", serverAddr)
+		log.Printf("Starting EEVIS server with TLS on https://%s\n", serverAddr)
 		if err := r.RunTLS(serverAddr, config.TLSCertFile, config.TLSKeyFile); err != nil {
 			log.Fatalf("Failed to start server with TLS: %v", err)
 		}
 	} else {
-		log.Printf("Starting EEVIS server on http://localhost%s\n", serverAddr)
+		log.Printf("Starting EEVIS server on http://%s\n", serverAddr)
 		if err := r.Run(serverAddr); err != nil {
 			log.Fatalf("Failed to start server: %v", err)
 		}

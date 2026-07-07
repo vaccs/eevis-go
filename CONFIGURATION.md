@@ -35,6 +35,7 @@ This document describes how to configure the EEVIS application using environment
 
 | Variable | Description | Default | Example |
 |----------|-------------|---------|---------|
+| `APP_HOST` | Host/IP to bind the application server | `127.0.0.1` | `127.0.0.1` or `0.0.0.0` |
 | `APP_PORT` | Port for the application | `8080` | `8080` or `443` |
 | `SESSION_SECRET` | Secret key for session encryption | `change-this-secret-key` | Generate with: `openssl rand -base64 32` |
 | `APP_ENV` | Environment mode | `development` | `development` or `production` |
@@ -60,12 +61,13 @@ DB_PORT=3306
 DB_NAME=eevis
 
 APP_PORT=8080
+APP_HOST=127.0.0.1
 SESSION_SECRET=dev-secret-key-change-in-prod
 USE_TLS=false
 APP_ENV=development
 ```
 
-### Production Environment
+### Production Environment (Direct TLS in App)
 
 ```env
 # .env
@@ -76,12 +78,34 @@ DB_PORT=3306
 DB_NAME=eevis
 
 APP_PORT=443
+APP_HOST=0.0.0.0
 SESSION_SECRET=GENERATED_RANDOM_SECRET_KEY
 USE_TLS=true
 TLS_CERT_FILE=/etc/ssl/certs/eevis.crt
 TLS_KEY_FILE=/etc/ssl/private/eevis.key
 APP_ENV=production
 ```
+
+### Production Behind Reverse Proxy (Recommended)
+
+Use this when Apache or Nginx handles public HTTPS and forwards to EEVIS on localhost over HTTP.
+
+```env
+# .env
+DB_USER=eevis
+DB_PASSWORD=YOUR_STRONG_PASSWORD_HERE
+DB_HOST=your-db-server.com
+DB_PORT=3306
+DB_NAME=eevis
+
+APP_HOST=127.0.0.1
+APP_PORT=8081
+SESSION_SECRET=GENERATED_RANDOM_SECRET_KEY
+USE_TLS=false
+APP_ENV=production
+```
+
+Proxy upstream target should be `http://127.0.0.1:8081`.
 
 ## Generating Secure Values
 
