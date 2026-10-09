@@ -50,3 +50,6 @@ setup_database.sql
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# Server binary
+eevis-server

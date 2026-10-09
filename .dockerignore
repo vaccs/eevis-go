@@ -1,0 +1,9 @@
+.git
+.vscode
+.env
+.env.*
+!.env.example
+eevis-server
+*.sql
+*.sh
+*.md

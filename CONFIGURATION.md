@@ -37,7 +37,7 @@ This document describes how to configure the EEVIS application using environment
 |----------|-------------|---------|---------|
 | `APP_HOST` | Host/IP to bind the application server | `127.0.0.1` | `127.0.0.1` or `0.0.0.0` |
 | `APP_PORT` | Port for the application | `8080` | `8080` or `443` |
-| `SESSION_SECRET` | Secret key for session encryption | `change-this-secret-key` | Generate with: `openssl rand -base64 32` |
+| `SESSION_SECRET` | Secret key for session encryption | random per restart | Generate with: `openssl rand -base64 32` |
 | `APP_ENV` | Environment mode | `development` | `development` or `production` |
 
 ### TLS/SSL Configuration

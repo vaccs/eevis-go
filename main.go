@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
 	"encoding/hex"
@@ -9,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 
@@ -46,8 +48,8 @@ func LoadConfig() *Config {
 		DBPort:        getEnv("DB_PORT", "3306"),
 		DBName:        getEnv("DB_NAME", "eevis"),
 		AppHost:       getEnv("APP_HOST", "127.0.0.1"),
-		AppPort:       getEnv("APP_PORT", "8080"),
-		SessionSecret: getEnv("SESSION_SECRET", "change-this-secret-key"),
+		AppPort:       getEnv("APP_PORT", getEnv("PORT", "8080")),
+		SessionSecret: getEnv("SESSION_SECRET", ""),
 		UseTLS:        getEnv("USE_TLS", "false") == "true",
 		TLSCertFile:   getEnv("TLS_CERT_FILE", ""),
 		TLSKeyFile:    getEnv("TLS_KEY_FILE", ""),
@@ -104,6 +106,80 @@ func initDB(config *Config) error {
 
 	log.Println("Database connection established")
 	return nil
+}
+
+var validDBName = regexp.MustCompile(`^[A-Za-z0-9_]+$`)
+
+// ensureDatabase creates the database if it does not exist (used on hosted
+// MySQL servers shared by several apps, e.g. Railway)
+func ensureDatabase(config *Config) error {
+	if !validDBName.MatchString(config.DBName) {
+		return fmt.Errorf("invalid DB_NAME %q", config.DBName)
+	}
+	dsn := fmt.Sprintf("%s:%s@tcp(%s:%s)/", config.DBUser, config.DBPassword, config.DBHost, config.DBPort)
+	server, err := sql.Open("mysql", dsn)
+	if err != nil {
+		return err
+	}
+	defer server.Close()
+	_, err = server.Exec("CREATE DATABASE IF NOT EXISTS `" + config.DBName + "` CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci")
+	return err
+}
+
+// ensureSchema creates the users table if it does not exist (matches schema.sql)
+func ensureSchema() error {
+	_, err := db.Exec(`CREATE TABLE IF NOT EXISTS users (
+		id              INT NOT NULL AUTO_INCREMENT,
+		username        VARCHAR(64) NOT NULL,
+		email           VARCHAR(255) NOT NULL,
+		hashed_password VARCHAR(255) NOT NULL,
+		is_logged_in    TINYINT(1) NOT NULL DEFAULT 0,
+		is_admin        TINYINT(1) NOT NULL DEFAULT 0,
+		PRIMARY KEY (id),
+		UNIQUE KEY uniq_username (username),
+		UNIQUE KEY uniq_email (email)
+	) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`)
+	return err
+}
+
+// seedAdmin creates an initial admin user from ADMIN_* env vars when the users table is empty
+func seedAdmin() error {
+	email := os.Getenv("ADMIN_EMAIL")
+	password := os.Getenv("ADMIN_PASSWORD")
+	if email == "" || password == "" {
+		return nil
+	}
+	username := getEnv("ADMIN_USERNAME", "admin")
+
+	var count int
+	if err := db.QueryRow("SELECT COUNT(*) FROM users").Scan(&count); err != nil {
+		return err
+	}
+	if count > 0 {
+		return nil
+	}
+
+	_, err := db.Exec("INSERT INTO users (username, email, hashed_password, is_admin) VALUES (?, ?, ?, 1)",
+		username, email, sha256sum(password))
+	if err != nil {
+		return err
+	}
+	log.Printf("Created initial admin user %s (%s)", username, email)
+	return nil
+}
+
+// sessionSecret returns SESSION_SECRET, or a random key so a missing secret
+// never leaves sessions signed with a publicly known value
+func sessionSecret(config *Config) []byte {
+	if config.SessionSecret != "" {
+		return []byte(config.SessionSecret)
+	}
+	log.Println("Warning: SESSION_SECRET not set, using a random key (users are logged out on restart)")
+	key := make([]byte, 32)
+	if _, err := rand.Read(key); err != nil {
+		log.Fatalf("Failed to generate session key: %v", err)
+	}
+	return key
 }
 
 // getUserByUsername retrieves a user from the database by username
@@ -190,17 +266,30 @@ func main() {
 		gin.SetMode(gin.ReleaseMode)
 	}
 
+	if getEnv("DB_CREATE_DATABASE", "false") == "true" {
+		if err := ensureDatabase(config); err != nil {
+			log.Fatalf("Failed to create database %q: %v", config.DBName, err)
+		}
+	}
+
 	// Initialize database
 	if err := initDB(config); err != nil {
 		log.Fatalf("Failed to connect to database: %v", err)
 	}
 	defer db.Close()
 
+	if err := ensureSchema(); err != nil {
+		log.Fatalf("Failed to create schema: %v", err)
+	}
+	if err := seedAdmin(); err != nil {
+		log.Fatalf("Failed to create initial admin user: %v", err)
+	}
+
 	// Create Gin router
 	r := gin.Default()
 
 	// Setup session store
-	store := cookie.NewStore([]byte(config.SessionSecret))
+	store := cookie.NewStore(sessionSecret(config))
 	r.Use(sessions.Sessions("eevis-session", store))
 
 	// Load HTML templates
@@ -208,6 +297,10 @@ func main() {
 
 	// Serve static files from visual directory
 	r.Static("/eevis/visual", "./visual")
+
+	r.GET("/", func(c *gin.Context) {
+		c.Redirect(http.StatusFound, "/eevis")
+	})
 
 	r.GET("/eevis", func(c *gin.Context) {
 		session := sessions.Default(c)
